@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model ReviewSession {
+  id           Int       @id @default(autoincrement())
+  source       String    // "local" | "github"
+  repoUrl      String?   // null for local reviews
+  branch       String?   // for github
+  filePath     String?   // for github
+  createdAt    DateTime  @default(now())
+  codePreview  String?   // small snippet
+  commentCount Int
+  hadFix       Boolean
+
+  agentRuns    AgentRun[]
+  pullRequests PullRequestLog[]
+}
+
+model AgentRun {
+  id              Int           @id @default(autoincrement())
+  reviewSession   ReviewSession @relation(fields: [reviewSessionId], references: [id])
+  reviewSessionId Int
+  agentName       String
+  durationMs      Int
+  createdAt       DateTime      @default(now())
+}
+
+model PullRequestLog {
+  id              Int           @id @default(autoincrement())
+  reviewSession   ReviewSession @relation(fields: [reviewSessionId], references: [id])
+  reviewSessionId Int
+
+  repoUrl    String
+  baseBranch String
+  headBranch String
+  filePath   String
+  prNumber   Int
+  prUrl      String
+  createdAt  DateTime @default(now())
+}

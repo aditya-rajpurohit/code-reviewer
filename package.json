@@ -1,0 +1,18 @@
+{
+  "name": "code-reviewer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "CloudFixer AI — Multi-Agent Code Reviewer",
+  "packageManager": "pnpm@10.12.4",
+  "scripts": {
+    "dev:api": "pnpm --filter @code-reviewer/api dev",
+    "dev:web": "pnpm --filter @code-reviewer/web dev",
+    "build": "pnpm -w build",
+    "install:all": "pnpm install",
+    "format": "prettier --write ."
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

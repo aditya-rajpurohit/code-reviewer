@@ -1,0 +1,13 @@
+{
+  "name": "@code-reviewer/types",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.26",
+    "typescript": "^5.9.3"
+  }
+}
