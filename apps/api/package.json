@@ -7,13 +7,13 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.948.0",
     "@code-reviewer/agents": "workspace:*",
     "@code-reviewer/db": "workspace:*",
     "@code-reviewer/github": "workspace:*",
     "@code-reviewer/types": "workspace:*",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^4.19.0"
   },
   "devDependencies": {

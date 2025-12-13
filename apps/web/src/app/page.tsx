@@ -80,7 +80,8 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code })
       });
-      const data = (await res.json()) as ReviewResult;
+      const data: ReviewResult = await res.json();
+
       setLocalReview(data);
     } catch (e) {
       console.error(e);
@@ -264,6 +265,25 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
+            )}
+            {localReview?.fix && (
+              <div style={{ marginTop: 16 }}>
+                <h4>AI-Suggested Fix (Local Code)</h4>
+                <p>Here is the updated code proposed by the agents:</p>
+                <pre
+                  style={{
+                    background: "#3b3b3b",
+                    padding: 8,
+                    borderRadius: 4,
+                    maxHeight: 300,
+                    overflow: "auto",
+                    fontFamily: "monospace",
+                    fontSize: 12
+                  }}
+                >
+                  {localReview.fix.fixedCode}
+                </pre>
+              </div>
             )}
           </div>
         </section>

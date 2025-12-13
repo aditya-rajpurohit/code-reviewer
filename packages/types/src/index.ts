@@ -20,8 +20,18 @@ export interface FixResult {
   diff: string; // unified diff text
 }
 
+export interface EvaluateResult {
+  overallScore: number;
+  correctness: number;
+  security: number;
+  style: number;
+  riskLevel: "low" | "medium" | "high";
+  summary: string;
+  keyFindings: string[];
+}
+
 export interface ReviewResult {
   comments: ReviewComment[];
-  // optional fix info; old code still works without it
   fix?: FixResult;
+  evaluation?: EvaluateResult;
 }

@@ -1,36 +1,71 @@
 import { FixResult } from "@code-reviewer/types";
+import { BedrockChat } from "./BedrockClient";
 
 export class FixAgent {
-  async suggestFix(params: { code: string; filePath?: string }): Promise<FixResult | null> {
-    const { code } = params;
-    const originalCode = code;
+  async suggestFix(params: {
+    code: string;
+    filePath?: string;
+  }): Promise<FixResult | null> {
+    const { code, filePath } = params;
 
-    let fixedCode = originalCode;
-    let changed = false;
-
-    // Rule 1: ensure newline at end
-    if (!fixedCode.endsWith("\n")) {
-      fixedCode = fixedCode + "\n";
-      changed = true;
+    if (code.length > 20000) {
+      console.warn("FixAgent: code too long, skipping fix.");
+      return null;
     }
 
-    // Rule 2: append a TODO if not present
-    if (!fixedCode.includes("TODO")) {
-      fixedCode =
-        fixedCode +
-        "\n# TODO: Review this function for edge cases (auto-suggested by Code Reviewer)\n";
-      changed = true;
+    const prompt = `
+      You are an expert software engineer.
+
+      You will be given the full contents of a single source file.
+
+      Goals:
+      - Fix obvious bugs and edge cases
+      - Improve clarity and structure
+      - Add basic error handling where appropriate
+      - Preserve original behavior unless clearly wrong
+      - Keep the same language and general style
+      - Do NOT add large new features
+
+      IMPORTANT:
+      - Return ONLY the full revised code of the file.
+      - Do NOT wrap the code in backticks.
+      - Do NOT add commentary or explanation before or after.
+      - If no meaningful changes are needed, return the original code exactly.
+
+      File path (for context): ${filePath ?? "unknown"}
+
+      Current code:
+      ----------------
+      ${code}
+      ----------------
+    `;
+
+    const fixedCode = await BedrockChat({
+      system:
+        "You are a careful refactoring assistant. You output only revised code.",
+      user: prompt,
+      temperature: 0.2,
+      maxTokens: 8000
+    });
+
+    if (!fixedCode) {
+      console.warn("FixAgent: model returned no fix");
+      return null;
     }
 
-    if (!changed) {
-      // if code already has newline + TODO, no fix suggested
+    if (normalize(code) === normalize(fixedCode)) {
+      // Treat as "no fix"
       return null;
     }
 
     return {
-      originalCode,
+      originalCode: code,
       fixedCode,
-      diff: "" // we can ignore diff for now or fill later
+      diff: "" // You can compute a real diff on the UI/backend side
     };
   }
+}
+
+function normalize(s: string): string {
+  return s.replace(/\s+$/g, "");
 }

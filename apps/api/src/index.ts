@@ -1,18 +1,39 @@
 import express from "express";
 import cors from "cors";
-import { StaticReviewAgent, FixAgent, ReviewOrchestrator } from "@code-reviewer/agents";
+import { StaticAgent, ReviewAgent, SecurityAgent, BugDetectionAgent, FixAgent, EvaluateAgent, Orchestrator } from "@code-reviewer/agents";
 import { ReviewRequest, ReviewResult } from "@code-reviewer/types";
 import { RestGitHubConnector } from "@code-reviewer/github";
 import { parseGithubUrl } from "./parseGithubUrl";
 import { logReviewSession, logPullRequest, prisma } from "@code-reviewer/db";
+import path from "path";
+import dotenv from "dotenv";
+
+
+// Load .env from monorepo root: /code-reviewer/.env
+dotenv.config({
+  path: path.resolve(process.cwd(), "..", "..", ".env")
+});
+
+console.log("AWS_REGION:", process.env.AWS_REGION);
+console.log("AWS_ACCESS_KEY_ID exists:", !!process.env.AWS_ACCESS_KEY_ID);
+console.log("BEDROCK_MODEL_ID:", process.env.BEDROCK_MODEL_ID);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const staticReviewAgent = new StaticReviewAgent();
+const staticAgent = new StaticAgent();
+const reviewAgent = new ReviewAgent();
+const securityAgent = new SecurityAgent();
+const bugAgent = new BugDetectionAgent();
 const fixAgent = new FixAgent();
-const orchestrator = new ReviewOrchestrator(staticReviewAgent, fixAgent);
+const evaluateAgent = new EvaluateAgent();
+
+const orchestrator = new Orchestrator(
+  [staticAgent, reviewAgent, securityAgent, bugAgent],
+  fixAgent,
+  evaluateAgent
+);
 
 app.get("/", (req, res) => {
   res.json({ message: "Code Reviewer API running!" });
@@ -22,13 +43,14 @@ app.get("/", (req, res) => {
 app.post("/api/review", async (req, res) => {
   try {
     const body = req.body as ReviewRequest;
-
+    
     if (!body.code || typeof body.code !== "string") {
       return res.status(400).json({ error: "Missing 'code' in request body" });
     }
-
+    
     const start = Date.now();
     const result: ReviewResult = await orchestrator.reviewWithFix(body);
+    const evalResult = result.evaluation;
     const duration = Date.now() - start;
 
     // log to DB (local source)

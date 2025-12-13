@@ -20,6 +20,14 @@ model ReviewSession {
 
   agentRuns    AgentRun[]
   pullRequests PullRequestLog[]
+
+  evalOverallScore Int?      // 0–100
+  evalCorrectness  Float?    // 0.0–1.0
+  evalSecurity     Float?    // 0.0–1.0
+  evalStyle        Float?    // 0.0–1.0
+  evalRiskLevel    String?   // "low" | "medium" | "high"
+  evalSummary      String?   // short text
+  evalKeyFindings  Json?     // array of strings
 }
 
 model AgentRun {
