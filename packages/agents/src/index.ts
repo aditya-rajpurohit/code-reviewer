@@ -6,3 +6,4 @@ export * from "./BugDetectionAgent";
 export * from "./FixAgent";
 export * from "./Orchestrator";
 export * from "./EvaluateAgent";
+export * from "./Logger";

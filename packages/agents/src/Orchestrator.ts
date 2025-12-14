@@ -1,4 +1,5 @@
 import { ReviewRequest, ReviewResult, FixResult, ReviewComment, EvaluateResult } from "@code-reviewer/types";
+import { logReviewEvent } from "./Logger";
 
 export class Orchestrator {
   constructor(
@@ -19,9 +20,14 @@ export class Orchestrator {
   ) {}
 
   async reviewWithFix(req: ReviewRequest): Promise<ReviewResult> {
-    console.log("========== ReviewOrchestrator: start ==========");
-    console.log(`File: ${req.filePath ?? "<local>"}`);
-    console.log(`Code length: ${req.code.length} chars\n`);
+
+    const { code, filePath } = req;
+    const codeLength = code.length;
+    const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+    console.log("========== Review Orchestrator: start ==========");
+    console.log("File:", filePath || "local");
+    console.log("Code length:", codeLength, "chars");
 
     const allComments: ReviewComment[] = [];
     
@@ -54,7 +60,28 @@ export class Orchestrator {
       if (result.comments?.length) {
         allComments.push(...(result.comments as any));
       }
-      console.log();
+      
+      // log per agent
+        void logReviewEvent({
+          runId,
+          stepType: "agent",
+          agentName: agent.constructor?.name || "UnknownAgent",
+          filePath,
+          codeLength,
+          durationMs: duration,
+          commentsCount: result.comments?.length,
+          timestampMs: Date.now(),
+          payload: {
+            commentTypes: result.comments.map((c) => c.type),
+            lines: result.comments.map((c) => ({
+              type: c.type,
+              lineStart: c.lineStart,
+              lineEnd: c.lineEnd
+            }))
+          }
+        });
+
+        console.log();
     }
 
     // 2) Fill in priority if missing & sort
@@ -101,6 +128,19 @@ export class Orchestrator {
       );
     }
 
+    // log fix agent
+    void logReviewEvent({
+      runId,
+      stepType: "fix",
+      agentName: this.fixAgent.constructor?.name || "FixAgent",
+      filePath,
+      codeLength,
+      durationMs: fixDuration,
+      commentsCount: allComments.length,
+      timestampMs: Date.now(),
+      payload: { hadFix: !!fix }
+    });
+
     // 4) Run Evaluate Agent
     let evaluateResult: EvaluateResult | null = null;
     if (this.evaluateAgent) {
@@ -121,9 +161,25 @@ export class Orchestrator {
       } else {
         console.log(`<-- Eval agent returned no result (${evalDuration}ms, skipping)`);
       }
+
+      void logReviewEvent({
+        runId,
+        stepType: "eval",
+        agentName: this.evaluateAgent.constructor?.name || "EvaluateAgent",
+        filePath,
+        codeLength,
+        durationMs: evalDuration,
+        commentsCount: allComments.length,
+        timestampMs: Date.now(),
+        evalOverallScore: evaluateResult?.overallScore,
+        evalRiskLevel: evaluateResult?.riskLevel,
+        evalSummary: evaluateResult?.summary,
+        payload: { keyFindings: evaluateResult?.keyFindings ?? [] }
+      });
+
     }
 
-    console.log("========== ReviewOrchestrator: end ==========\n");
+    console.log("========== Review Orchestrator: end ==========\n");
 
     return {
       comments: allComments,

@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.948.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.948.0",
     "@code-reviewer/types": "workspace:*"
   },
   "devDependencies": {
