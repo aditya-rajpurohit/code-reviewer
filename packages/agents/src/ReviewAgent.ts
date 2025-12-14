@@ -3,7 +3,12 @@ import { BedrockChat } from "./BedrockClient";
 
 export class ReviewAgent {
   async review(req: ReviewRequest): Promise<ReviewResult> {
+    const langHint = req.language
+      ? `The code is written in ${req.language}.`
+      : "Infer the language from the syntax.";
+
     const prompt = `
+        ${langHint}
         You are a senior software engineer performing a code review.
 
         Return ONLY valid JSON in this exact shape:

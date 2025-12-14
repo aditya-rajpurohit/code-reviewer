@@ -9,11 +9,11 @@
     "prisma:migrate": "prisma migrate dev --name init"
   },
   "dependencies": {
-    "@prisma/client": "^6.1.0"
+    "@prisma/client": "^6.19.1"
   },
   "devDependencies": {
-    "prisma": "^6.1.0",
-    "typescript": "^5.3.3",
-    "@types/node": "^20.11.30"
+    "@types/node": "^20.11.30",
+    "prisma": "^6.19.1",
+    "typescript": "^5.3.3"
   }
 }

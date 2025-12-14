@@ -11,6 +11,7 @@ export interface ReviewComment {
 export interface ReviewRequest {
   code: string;
   filePath?: string;
+  language?: string;
 }
 
 // New: the result of a fix operation

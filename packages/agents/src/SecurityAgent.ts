@@ -3,7 +3,12 @@ import { BedrockChat } from "./BedrockClient";
 
 export class SecurityAgent {
   async review(req: ReviewRequest): Promise<ReviewResult> {
+    const langHint = req.language
+      ? `The code is written in ${req.language}.`
+      : "Infer the language from the syntax.";
+
     const prompt = `
+        ${langHint}
         You are an application security expert reviewing source code.
 
         Identify security issues such as:

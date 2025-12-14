@@ -3,7 +3,12 @@ import { BedrockChat } from "./BedrockClient";
 
 export class BugDetectionAgent {
   async review(req: ReviewRequest): Promise<ReviewResult> {
+    const langHint = req.language
+      ? `The code is written in ${req.language}.`
+      : "Infer the language from the syntax.";
+
     const prompt = `
+        ${langHint}
         You are a bug-finding expert.
 
         Find potential logic bugs and edge-case issues such as:

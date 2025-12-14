@@ -3,24 +3,39 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ReviewSource {
+  local
+  file
+  github
 }
 
 model ReviewSession {
-  id           Int       @id @default(autoincrement())
-  source       String    // "local" | "github"
-  repoUrl      String?   // null for local reviews
-  branch       String?   // for github
-  filePath     String?   // for github
-  createdAt    DateTime  @default(now())
-  codePreview  String?   // small snippet
-  commentCount Int
-  hadFix       Boolean
+  id           Int          @id @default(autoincrement())
+  source       ReviewSource
+  repoUrl      String?      // null for local or file uploads
+  branch       String?      // for github
+  filePath     String?      // for github or uploaded file name
+  createdAt    DateTime     @default(now())
+  codeHash     String       @default("")   // SHA-256 or similar of original code
+  codePreview  String?      // small snippet if you want to show in UI
 
+  // review metrics
+  commentCount   Int        // number of comments produced by agents
+  hadFix         Boolean    // whether a fix was proposed
+  agentDurationMs Int       @default(0)  // total ms spent in the multi-agent pipeline
+
+  // S3 artifact
+  s3Key String?    // e.g. fixed/source/sessionId/filename
+
+  // relations
   agentRuns    AgentRun[]
   pullRequests PullRequestLog[]
 
+  // evaluation from EvalAgent
   evalOverallScore Int?      // 0–100
   evalCorrectness  Float?    // 0.0–1.0
   evalSecurity     Float?    // 0.0–1.0
@@ -34,6 +49,7 @@ model AgentRun {
   id              Int           @id @default(autoincrement())
   reviewSession   ReviewSession @relation(fields: [reviewSessionId], references: [id])
   reviewSessionId Int
+
   agentName       String
   durationMs      Int
   createdAt       DateTime      @default(now())

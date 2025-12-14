@@ -1,22 +1,27 @@
 import express from "express";
 import cors from "cors";
+import multer from "multer";
 import { StaticAgent, ReviewAgent, SecurityAgent, BugDetectionAgent, FixAgent, EvaluateAgent, Orchestrator } from "@code-reviewer/agents";
 import { ReviewRequest, ReviewResult } from "@code-reviewer/types";
 import { RestGitHubConnector } from "@code-reviewer/github";
 import { parseGithubUrl } from "./parseGithubUrl";
 import { logReviewSession, logPullRequest, prisma } from "@code-reviewer/db";
+import { uploadFixedCodeArtifact } from "./s3";
 import path from "path";
 import dotenv from "dotenv";
 
-
 // Load .env from monorepo root: /code-reviewer/.env
-dotenv.config({
-  path: path.resolve(process.cwd(), "..", "..", ".env")
-});
+dotenv.config({ path: path.resolve(process.cwd(), "..", "..", ".env")});
 
 console.log("AWS_REGION:", process.env.AWS_REGION);
 console.log("AWS_ACCESS_KEY_ID exists:", !!process.env.AWS_ACCESS_KEY_ID);
 console.log("BEDROCK_MODEL_ID:", process.env.BEDROCK_MODEL_ID);
+console.log("S3_BUCKET_NAME:", process.env.S3_BUCKET_NAME);
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 512 * 1024 } // 512KB;
+});
 
 const app = express();
 app.use(cors());
@@ -35,6 +40,64 @@ const orchestrator = new Orchestrator(
   evaluateAgent
 );
 
+type SourceType = "local" | "file" | "github";
+
+async function runReviewAndLog(params: {
+  source: SourceType;
+  code: string;
+  filePath?: string;
+  repoUrl?: string;
+  branch?: string;
+}): Promise<{ result: ReviewResult; reviewSessionId: number }> {
+  const { source, code, filePath, repoUrl, branch } = params;
+
+  const start = Date.now();
+  const reviewReq: ReviewRequest = { code, filePath};
+  const result: ReviewResult = await orchestrator.reviewWithFix(reviewReq);
+  const duration = Date.now() - start;
+  const evalResult = result.evaluation;
+
+  // Generate a unique-ish seed for S3 key
+  const sessionKeySeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+  let s3Key: string | null = null;
+
+  if (result.fix?.fixedCode) {
+    console.log("[S3] attempting upload for source:", source);
+    s3Key =
+      (await uploadFixedCodeArtifact({
+        sessionKeySeed,
+        source: source as any,
+        filePath,
+        fixedCode: result.fix.fixedCode
+      })) ?? null;
+    console.log("[S3] upload result key:", s3Key);
+  } else {    
+    console.log("[S3] no fix generated; skipping S3 upload");
+  }
+
+  const reviewSession = await logReviewSession({
+    source,
+    code,
+    commentsCount: result.comments.length,
+    hadFix: !!result.fix,
+    repoUrl,
+    branch,
+    filePath,
+    agentDurationMs: duration,
+    s3Key,
+    evalOverallScore: evalResult?.overallScore ?? null,
+    evalCorrectness: evalResult?.correctness ?? null,
+    evalSecurity: evalResult?.security ?? null,
+    evalStyle: evalResult?.style ?? null,
+    evalRiskLevel: evalResult?.riskLevel ?? null,
+    evalSummary: evalResult?.summary ?? null,
+    evalKeyFindings: evalResult?.keyFindings ?? null
+  });
+
+  return { result, reviewSessionId: reviewSession.id };
+}
+
 app.get("/", (req, res) => {
   res.json({ message: "Code Reviewer API running!" });
 });
@@ -48,21 +111,10 @@ app.post("/api/review", async (req, res) => {
       return res.status(400).json({ error: "Missing 'code' in request body" });
     }
     
-    const start = Date.now();
-    const result: ReviewResult = await orchestrator.reviewWithFix(body);
-    const evalResult = result.evaluation;
-    const duration = Date.now() - start;
-
-    // log to DB (local source)
-    await logReviewSession({
+    const { result } = await runReviewAndLog({
       source: "local",
       code: body.code,
-      commentsCount: result.comments.length,
-      hadFix: !!result.fix,
-      repoUrl: undefined,
-      branch: undefined,
-      filePath: undefined,
-      agentDurationMs: duration
+      filePath: body.filePath
     });
 
     res.json(result);
@@ -71,6 +123,32 @@ app.post("/api/review", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// File upload code review
+app.post("/api/review/file", upload.single("file"), async (req, res) => {
+    try {
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ error: "Missing 'file' in form data" });
+      }
+
+      const code = file.buffer.toString("utf-8");
+      const filePath = file.originalname;
+
+      const { result } = await runReviewAndLog({
+        source: "file",
+        code,
+        filePath
+      });
+
+      res.json(result);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
 
 // === NEW: list branches for a repo ===
 app.post("/api/github/branches", async (req, res) => {
@@ -154,29 +232,19 @@ app.post("/api/review/github", async (req, res) => {
       filePath
     });
 
-    const reviewReq: ReviewRequest = { code: file.content, filePath };
-
-    const start = Date.now();
-    const result: ReviewResult = await orchestrator.reviewWithFix(reviewReq);
-    const duration = Date.now() - start;
-
-    // log GitHub review
-    const reviewSession = await logReviewSession({
+    const { result, reviewSessionId } = await runReviewAndLog({
       source: "github",
-      repoUrl,
-      branch,
-      filePath,
       code: file.content,
-      commentsCount: result.comments.length,
-      hadFix: !!result.fix,
-      agentDurationMs: duration
+      filePath,
+      repoUrl,
+      branch
     });
 
     res.json({
       filePath,
       branch,
       repoUrl,
-      reviewSessionId: reviewSession.id,
+      reviewSessionId,
       ...result
     });
   } catch (err: any) {
@@ -295,10 +363,8 @@ app.post("/api/review/github/pr", async (req, res) => {
 
 app.get("/api/metrics", async (req, res) => {
   try {
-    // Total review sessions
     const totalReviews = await prisma.reviewSession.count();
 
-    // Breakdown by source
     const localReviews = await prisma.reviewSession.count({
       where: { source: "local" }
     });
@@ -307,20 +373,20 @@ app.get("/api/metrics", async (req, res) => {
       where: { source: "github" }
     });
 
-    // Reviews where a fix was proposed
+    const fileReviews = await prisma.reviewSession.count({
+      where: { source: "file" }
+    });
+
     const reviewsWithFix = await prisma.reviewSession.count({
       where: { hadFix: true }
     });
 
-    // Total PRs
     const totalPRs = await prisma.pullRequestLog.count();
 
-    // Average agent runtime (ms)
     const avgAgentRun = await prisma.agentRun.aggregate({
       _avg: { durationMs: true }
     });
 
-    // Average comments per review
     const avgComments = await prisma.reviewSession.aggregate({
       _avg: { commentCount: true }
     });
@@ -328,6 +394,7 @@ app.get("/api/metrics", async (req, res) => {
     res.json({
       totalReviews,
       localReviews,
+      fileReviews,
       githubReviews,
       reviewsWithFix,
       totalPRs,
