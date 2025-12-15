@@ -8,7 +8,7 @@ import { FixViewer } from "@/components/FixViewer";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
-export default function UploadReviewPage() {
+export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [review, setReview] = useState<ReviewResult | null>(null);
   const [loading, setLoading] = useState(false);

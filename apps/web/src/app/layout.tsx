@@ -31,19 +31,20 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             backdropFilter: "blur(6px)"
           }}
         >
-          <div style={{ fontWeight: 600, fontSize: 16 }}>Code Reviewer</div>
+          <div style={{ fontWeight: 600, fontSize: 16 }}>
+            Code Reviewer</div>
           <nav style={{ display: "flex", gap: 16, fontSize: 14 }}>
             <Link href="/" style={navLinkStyle}>
               Home
             </Link>
             <Link href="/local" style={navLinkStyle}>
-              Editor
+              Code Editor
             </Link>
             <Link href="/upload" style={navLinkStyle}>
               File Upload
             </Link>
             <Link href="/github" style={navLinkStyle}>
-              GitHub URL
+              GitHub Repo
             </Link>
           </nav>
         </header>

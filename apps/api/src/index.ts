@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import multer from "multer";
+import axios from "axios";
 import { StaticAgent, ReviewAgent, SecurityAgent, BugDetectionAgent, FixAgent, EvaluateAgent, Orchestrator } from "@code-reviewer/agents";
 import { ReviewRequest, ReviewResult } from "@code-reviewer/types";
 import { RestGitHubConnector } from "@code-reviewer/github";
@@ -17,6 +18,8 @@ console.log("AWS_REGION:", process.env.AWS_REGION);
 console.log("AWS_ACCESS_KEY_ID exists:", !!process.env.AWS_ACCESS_KEY_ID);
 console.log("BEDROCK_MODEL_ID:", process.env.BEDROCK_MODEL_ID);
 console.log("S3_BUCKET_NAME:", process.env.S3_BUCKET_NAME);
+console.log("GITHUB_CLIENT_ID exists:", !!process.env.GITHUB_CLIENT_ID);
+console.log("GITHUB_OAUTH_REDIRECT:", process.env.GITHUB_OAUTH_REDIRECT || "<undefined>");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -149,6 +152,73 @@ app.post("/api/review/file", upload.single("file"), async (req, res) => {
     }
   }
 );
+
+// === GitHub OAuth: start login ===
+app.get("/auth/github/login", (req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  const redirectUri = process.env.GITHUB_OAUTH_REDIRECT;
+
+  if (!clientId || !redirectUri) {
+    return res.status(500).send("GitHub OAuth is not configured (missing CLIENT_ID or REDIRECT).");
+  }
+
+  const scope = "repo";
+  const githubAuthUrl =
+    "https://github.com/login/oauth/authorize" +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=${encodeURIComponent(scope)}`;
+
+  res.redirect(githubAuthUrl);
+});
+
+// === GitHub OAuth: callback ===
+app.get("/auth/github/callback", async (req, res) => {
+  try {
+    const code = req.query.code as string | undefined;
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+    const redirectUri = process.env.GITHUB_OAUTH_REDIRECT;
+    const webAppUrl = process.env.WEB_APP_URL || "http://localhost:3000";
+
+    if (!code) {
+      return res.status(400).send("Missing ?code from GitHub OAuth callback.");
+    }
+    if (!clientId || !clientSecret || !redirectUri) {
+      return res.status(500).send("GitHub OAuth not fully configured on server.");
+    }
+
+    // code for access_token
+    const tokenResp = await axios.post(
+      "https://github.com/login/oauth/access_token",
+      {
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: redirectUri
+      },
+      {
+        headers: {
+          Accept: "application/json"
+        }
+      }
+    );
+
+    const accessToken = tokenResp.data.access_token as string | undefined;
+
+    if (!accessToken) {
+      console.error("GitHub OAuth: no access_token in response", tokenResp.data);
+      return res.status(500).send("Failed to obtain access token from GitHub.");
+    }
+
+    const redirectTo = `${webAppUrl}/github?gh_token=${encodeURIComponent(accessToken)}`;
+
+    res.redirect(redirectTo);
+  } catch (err: any) {
+    console.error("GitHub OAuth callback error:", err?.message ?? err);
+    res.status(500).send("GitHub OAuth callback failed.");
+  }
+});
 
 // === NEW: list branches for a repo ===
 app.post("/api/github/branches", async (req, res) => {
