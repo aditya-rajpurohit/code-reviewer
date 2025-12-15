@@ -187,6 +187,8 @@ This project demonstrates a complete AI-powered code review platform integrating
 
 # 📔 Project Artifacts:
 
-[![YouTube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](YOUR_YOUTUBE_LINK_HERE)
+[![YouTube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/HVczEzn-wek)
+
 [![Slides](https://img.shields.io/badge/Presentation-4285F4?style=for-the-badge&logoColor=white)](docs/slides.pdf)
+
 [![PDF](https://img.shields.io/badge/PDF-EC1C24?style=for-the-badge&logo=adobeacrobatreader&logoColor=white)](docs/report.pdf)
